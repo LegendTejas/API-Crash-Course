@@ -43,7 +43,7 @@ It covers everything from basics to advanced features with hands-on implementati
 
 ## 🚀 Getting Started
 
-### 1️⃣ Clone the repo
+### 1 Clone the repo
 
 ```
 git clone https://github.com/your-username/FastAPI-Course.git
@@ -51,32 +51,23 @@ git clone https://github.com/your-username/FastAPI-Course.git
 cd FastAPI-Course
 ```
 
-### 2️⃣ Create a virtual environment
+### 2 Create a virtual environment
 
 ```
-python -m venv venv
+python -m venv fastapi-venv
 source venv/bin/activate # Mac/Linux
-venv\Scripts\activate # Windows
+fastapi-venv\Scripts\activate # Windows
 ```
 
-### 3️⃣ Install dependencies
+### 3 You also need an ASGI server, for production such as Uvicorn or Hypercorn:
 
 ```
-pip install -r requirements.txt
+pip install uvicorn
 ```
 
+### 4 Create a main.py file
 
-### 4️⃣ Run FastAPI app
-
-```
-uvicorn main:app --reload
-```
-
-
-### 5️⃣ Test in Browser
-Open `http://127.0.0.1:8000/docs` for interactive API docs (Swagger UI).  
-Or `http://127.0.0.1:8000/redoc` for ReDoc documentation.  
-
+[main.py]()
 ---
 
 ## 🎯 Goals
