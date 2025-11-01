@@ -43,31 +43,67 @@ It covers everything from basics to advanced features with hands-on implementati
 
 ## 🚀 Fast API Full Course (Follow Step by Step Process to master it)
 
-### 1 Clone the repo
+
+#### 1. Create a virtual environment and pip install fastapi
 
 ```
-git clone https://github.com/your-username/FastAPI-Course.git
-
-cd FastAPI-Course
+python -m venv fastapi-env
 ```
 
-### 2 Create a virtual environment
+- We need to activate the virtual environment now:
 
 ```
-python -m venv fastapi-venv
 source venv/bin/activate # Mac/Linux
-fastapi-venv\Scripts\activate # Windows
+fastapi-env\Scripts\activate # Windows
 ```
 
-### 3 You also need an ASGI server, for production such as Uvicorn or Hypercorn:
+- Install fastapi
+
+```
+pip install fastapi
+```
+
+### 2. You also need an ASGI server, for production such as Uvicorn or Hypercorn:
 
 ```
 pip install uvicorn
 ```
 
-### 4 Create a main.py file
+### 3. Create a main.py file
 
-[main.py]()
+```
+from fastapi import FastAPI
+
+app = FastAPI()
+
+
+@app.get('/')
+def index():
+    return {'data': {'name':'Tejas'}}
+
+@app.get('/about')
+def about():
+    return {'data': 'about page'}
+```
+
+### 4. Run the server with 
+
+```
+(fastapi-env) PS E:\FastAPI> uvicorn main:app --reload
+
+
+INFO:     Will watch for changes in these directories: ['E:\\FastAPI']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [20136] using StatReload
+INFO:     Started server process [15052]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+```
+
+Now click on the link http://127.0.0.1:8000 to see the output in server
+
+<img width="409" height="242" alt="image" src="https://github.com/user-attachments/assets/dbff3967-9141-4458-8f23-d6d58fef7880" />
+
 ---
 
 ## 🎯 Goals
