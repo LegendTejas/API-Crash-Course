@@ -41,7 +41,7 @@ It covers everything from basics to advanced features with hands-on implementati
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Fast API Full Course (Follow Step by Step Process to master it)
 
 ### 1 Clone the repo
 
