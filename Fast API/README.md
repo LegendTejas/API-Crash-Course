@@ -44,7 +44,7 @@ It covers everything from basics to advanced features with hands-on implementati
 ## 🚀 Fast API Full Course (Follow Step by Step Process to master it)
 
 
-#### 1. Create a virtual environment and pip install fastapi
+### 1. Create a virtual environment and pip install fastapi
 
 ```
 python -m venv fastapi-env
@@ -102,7 +102,63 @@ INFO:     Application startup complete.
 
 Now click on the link http://127.0.0.1:8000 to see the output in server
 
-<img width="409" height="242" alt="image" src="https://github.com/user-attachments/assets/dbff3967-9141-4458-8f23-d6d58fef7880" />
+<img width="300" height="200" alt="image" src="https://github.com/user-attachments/assets/dbff3967-9141-4458-8f23-d6d58fef7880" />
+
+
+### 5. Path Parameters
+
+we can add any parameter have a look:
+
+```
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get('/')
+def index():
+    return {'data': 'blog list'}
+
+@app.get('/blog/{id}')
+def show(id : int):
+    #fetch blog with id = id
+    return {'data': id}
+```
+
+Now if we again reload the server 
+``` 
+uvicorn main:app --reload
+```
+
+It will show this on the server http://127.0.0.1:8000/blog/1
+
+```
+{
+  "data": 1
+}
+```
+Now you can change the id to 2, 3 or 100, etc.
+
+
+- Ok now let's create another path for unpublished blogs
+```
+@app.get('blog/unpublished')
+def unpublished():
+    return {'data': 'all unpublished blogs'}
+```
+
+again reload the server: http://127.0.0.1:8000/blog/unpublished
+and in this way you can create multiple paths
+
+
+### 6. API Docs - Swagger/ redocs
+
+FastAPI provides an automatic documentation with Swagger UI where you can call and test your API directly from the browser http://127.0.0.1:8000/docs
+
+<img width="1500" height="600" alt="image" src="https://github.com/user-attachments/assets/877c58a0-073f-4c36-94cd-4906a2ea9a01" />
+
+Here we can try out all the methods GET, POST, PUT, DELETE and also see HTTPExceptions if any
+
+- Similarly for redoc we will simply type: http://127.0.0.1:8000/redoc
 
 ---
 
@@ -116,7 +172,7 @@ Now click on the link http://127.0.0.1:8000 to see the output in server
 ## 📖 Resources
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)  
 - [Pydantic Documentation](https://docs.pydantic.dev/)  
-- [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)  
+- [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)
 
 ---
 
