@@ -43,6 +43,8 @@ It covers everything from basics to advanced features with hands-on implementati
 
 ## 🚀 Fast API Full Course (Follow Step by Step Process to master it)
 
+# Part 1
+
 
 ### 1. Create a virtual environment and pip install fastapi
 
@@ -340,22 +342,317 @@ Folder Structure:
 
 main.py:
 ```
+from fastapi import FastAPI # type: ignore
+from . import schemas
 
+app = FastAPI()
+
+
+@app.post('/blog')
+def create(request: schemas.Blog):
+    return request
+```
+
+schemas.py:
+```
+from pydantic import BaseModel
+
+class Blog(BaseModel):
+    title:str
+    body:str
 ```
 
 to run the server we will type this in terminal:
 ```
-blog.main:app --reload
+uvicorn blog.main:app --reload
 ```
 
+Now we will establish the database connection to store all the information from `Request body`
+to the database so for that we will be using `SQLAlchemy`. Now to import it we need to install it: 
+```
+pip install sqlalchemy
+```
+
+- so let's create a db first `blog.db`
+
+- Now in database.py:
+```
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+SQLALCHEMY_DATABASE_URL = 'sqlite:/// ./blog.db'
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args ={
+    "check_same_thread": False
+})
+
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+Base = declarative_base()
+```
+
+- **Creating Model & Tables**
+
+Let's create table
+
+models.py:
+```
+from sqlalchemy import Column, Integer, String
+from database import Base
+
+class Blog(Base):
+    __tablename__ = 'blogs'
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    body = Column(String)
+```
+
+To run it we need this line: `models.Base.metadata.create_all(engine)`
+
+So we will make modifications in main.py:
+```
+from fastapi import FastAPI # type: ignore
+from . import schemas, models
+from .database import engine
+
+app = FastAPI()
+
+models.Base.metadata.create_all(engine)
+
+@app.post('/blog')
+def create(request: schemas.Blog):
+    return request
+```
+
+And now if we reload server we will have table in the database `blog.db` you can view it in VS Code with `SQLite Viewer` Extension:
+
+<img width="737" height="345" alt="image" src="https://github.com/user-attachments/assets/09662a0b-c5c9-4632-9aba-17a328a06660" />
+
+
+### 11. Store Blog to Database
+
+main.py:
+```
+from fastapi import FastAPI, Depends # type: ignore
+from . import schemas, models
+from .database import engine, SessionLocal
+from sqlalchemy.orm import Session
+
+app = FastAPI()
+
+models.Base.metadata.create_all(engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@app.post('/blog')
+def create(request: schemas.Blog, db : Session = Depends(get_db)):
+    new_blog = models.Blog(title=request.title, body=request.body)
+    db.add(new_blog)
+    db.commit()
+    db.refresh(new_blog)
+    return new_blog
+```
+
+Now on reloading server in POST we can add data in the db:
+```
+{
+  "title": "Tejas Blog",
+  "body": "My Blog Body"
+}
+```
+
+Now let's add one more row:
+```
+{
+  "title": "second blog",
+  "body": "blog body 2"
+}
+```
+
+<img width="602" height="278" alt="image" src="https://github.com/user-attachments/assets/aee9de7f-9044-484d-a75a-4995ad0707a7" />
+
+
+### 12. Store Blog to Database
+
+Now let's create the GET method also inside main.py:
+```
+@app.get('/blog')
+def all(db: Session = Depends(get_db)):
+    blogs = db.query(models.Blog).all()
+    return blogs
+```
+
+And now if we reload server and execute GET we will have:
+
+<img width="485" height="324" alt="image" src="https://github.com/user-attachments/assets/0b8f3c7e-9bfe-4f98-999a-05f3299560ae" />
+
+
+Let's GET the data using ID for that add this code snippet in main.py:
+```
+@app.get('/blog/{id}')
+def show(id, db: Session = Depends(get_db)):
+    blog = db.query(models.Blog).filter(models.Blog.id == id).first()
+    return blog
+```
+
+on executing with ID = 2 we get the second row with ID = 2 i.e:
+
+<img width="883" height="851" alt="image" src="https://github.com/user-attachments/assets/83e07268-1a19-4021-981f-fd009c9a0315" />
+
+But what about any ID other than 1 and 2 (like 3) on executing id = 3 we will get response as `null` but there is a better way to get the response and handle errors so here comes Error handling with HTTPException and Status Code
+
+
+### 13. HTTPException & Status Code
+
+We can manually give the status code like this:
+```
+@app.post('/blog', status_code=201)
+```
+
+HTTP status code 201 means **Created** — The request succeeded, and a new resource was created on the server.
+
+- Now what if we dont know the exact status code to use where then in that case we can use the `fatapi.status` to get the status code recommendations
+
+Example:
+```
+from fastapi import FastAPI, status
+
+app = FastAPI()
+
+@app.post("/blog", status_code=status.HTTP_201_CREATED)
+def create_blog(name: str):
+    return {"name": name}
+```
+
+Now let's improve the code and response for our previous problem in id other than 1 and 2 
+<img width="373" height="231" alt="image" src="https://github.com/user-attachments/assets/e4fee9dc-4c64-48eb-8660-786e7a810be6" />
+
+so to handle the status code and null response we will first have to import `HTTPException` from fastapi:
+
+**main.py:**
+```
+from fastapi import FastAPI, Depends, status, HTTPException
+from . import schemas, models
+from .database import engine, SessionLocal
+from sqlalchemy.orm import Session
+
+app = FastAPI()
+
+models.Base.metadata.create_all(engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@app.post('/blog', status_code=status.HTTP_201_CREATED)
+def create(request: schemas.Blog, db: Session = Depends(get_db)):
+    new_blog = models.Blog(title=request.title, body=request.body)
+    db.add(new_blog)
+    db.commit()
+    db.refresh(new_blog)
+    return new_blog
+
+
+@app.get('/blog')
+def all(db: Session = Depends(get_db)):
+    blogs = db.query(models.Blog).all()
+    return blogs
+
+
+@app.get('/blog/{id}', status_code=200)
+def show(id: int, db: Session = Depends(get_db)):
+    blog = db.query(models.Blog).filter(models.Blog.id == id).first()
+    if not blog:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+    return blog
+```
+
+And now we got the proper Status Code and Response for this
+<img width="696" height="285" alt="image" src="https://github.com/user-attachments/assets/445c4b91-8111-4d8d-b65d-1a1991247372" />
+
+
+### 14. Delete a Blog
+
+Example:
+
+```
+@app.delete('/blog/{id}', status_code=status.HTTP_204_NO_CONTENT)
+def destroy(id: int, db: Session = Depends(get_db)):
+    # Query the blog by ID
+    blog = db.query(models.Blog).filter(models.Blog.id == id)
+
+    # If blog doesn't exist, raise a 404 error
+    if not blog.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    # Delete the blog if found
+    blog.delete(synchronize_session=False)
+    db.commit()
+    return {"message": "Blog deleted successfully"}
+```
+
+Now reload the server and try out `DELETE` method and try deleting id = 2 it will get deleted.
+
+
+### 15. Update a Blog
+
+Example:
+
+```
+@app.put('/blog/{id}', status_code=status.HTTP_202_ACCEPTED)
+def update(id: int, request: schemas.Blog, db: Session = Depends(get_db)):
+    blog = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog.update(request.dict())
+    db.commit()
+    return {"message": "Updated successfully"}
+```
+
+Now reload and try out `UPDATE` method by updating title and body of id = 2
+<img width="517" height="579" alt="image" src="https://github.com/user-attachments/assets/a37a5118-5ba9-4550-ae76-83c7920fbe2e" />
 
 
 
+Let's execute the `GET` method to see changes:
+<img width="482" height="337" alt="image" src="https://github.com/user-attachments/assets/1916e5b4-fb38-45f1-82e2-a02c25e7669e" />
 
 
+so let's see the db it's updated:
+<img width="605" height="267" alt="image" src="https://github.com/user-attachments/assets/d3ab873f-dbe2-4240-948c-6d457a0304a8" />
 
+So till now we have seen all the 4 methods (GET, POST, PUT, DELETE)
+<img width="912" height="600" alt="image" src="https://github.com/user-attachments/assets/caae3e9b-5fbb-4a08-a2a9-08d0287ad889" />
 
 ---
+
+# Part 2
+
+### 16. Response Model
+
+---
+
 ## 🎯 Goals
 - Learn **FastAPI** through real-world projects  
 - Build **scalable, secure, and efficient APIs**  
