@@ -223,6 +223,7 @@ def create_blog():
 ```
 
 Go to docs:
+
 <img width="1200" height="700" alt="image" src="https://github.com/user-attachments/assets/409e4c91-96da-4279-ad86-aeaa9c073efc" />
 
 Now to declare a **request body**, you use **Pydantic** models with all their power and benefits
@@ -531,6 +532,7 @@ def create_blog(name: str):
 ```
 
 Now let's improve the code and response for our previous problem in id other than 1 and 2 
+
 <img width="373" height="231" alt="image" src="https://github.com/user-attachments/assets/e4fee9dc-4c64-48eb-8660-786e7a810be6" />
 
 so to handle the status code and null response we will first have to import `HTTPException` from fastapi:
@@ -581,6 +583,7 @@ def show(id: int, db: Session = Depends(get_db)):
 ```
 
 And now we got the proper Status Code and Response for this
+
 <img width="696" height="285" alt="image" src="https://github.com/user-attachments/assets/445c4b91-8111-4d8d-b65d-1a1991247372" />
 
 
@@ -631,18 +634,22 @@ def update(id: int, request: schemas.Blog, db: Session = Depends(get_db)):
 ```
 
 Now reload and try out `UPDATE` method by updating title and body of id = 2
+
 <img width="517" height="579" alt="image" src="https://github.com/user-attachments/assets/a37a5118-5ba9-4550-ae76-83c7920fbe2e" />
 
 
 
 Let's execute the `GET` method to see changes:
+
 <img width="482" height="337" alt="image" src="https://github.com/user-attachments/assets/1916e5b4-fb38-45f1-82e2-a02c25e7669e" />
 
 
 so let's see the db it's updated:
+
 <img width="605" height="267" alt="image" src="https://github.com/user-attachments/assets/d3ab873f-dbe2-4240-948c-6d457a0304a8" />
 
 So till now we have seen all the 4 methods (GET, POST, PUT, DELETE)
+
 <img width="912" height="600" alt="image" src="https://github.com/user-attachments/assets/caae3e9b-5fbb-4a08-a2a9-08d0287ad889" />
 
 ---
@@ -654,9 +661,11 @@ So till now we have seen all the 4 methods (GET, POST, PUT, DELETE)
 Let's say we want to get blog by id 1 but we only want to get title only (no body and no id) then in that case we will use reponse body 
 
 **Before:**
+
 <img width="405" height="221" alt="image" src="https://github.com/user-attachments/assets/09b470f7-dbe9-4ace-8996-18f0b27b8a60" />
 
 **After:**
+
 <img width="260" height="141" alt="image" src="https://github.com/user-attachments/assets/d459966c-8fbf-423c-80f9-4c16de5bfb0f" />
 
 **What Happens on using response body**
@@ -920,10 +929,12 @@ uvicorn blog.main:app --reload
 ```
 
 Now try creating user:
+
 <img width="875" height="793" alt="image" src="https://github.com/user-attachments/assets/b035eaee-e7ef-4657-9189-1edebd907715" />
 
 
 And to confirm let's check the blog.db:
+
 <img width="849" height="226" alt="image" src="https://github.com/user-attachments/assets/4bfd4f9f-e2d3-4f65-b46c-43f468150a77" />
 
 So new user created successfully!!!
@@ -1060,13 +1071,16 @@ def create_user(request: schemas.UserCreate, db: Session = Depends(get_db)):
 
 
 Now try executing this:
+
 <img width="269" height="133" alt="image" src="https://github.com/user-attachments/assets/211a76eb-6738-4b10-a253-a5e4b0b311d8" />
 
 Now if we check the blog.db , The password is hashed
+
 <img width="921" height="131" alt="image" src="https://github.com/user-attachments/assets/58d7d325-ed85-412f-938f-52bf5597e1f6" />
 
 
 Let's create 4 more users:
+
 <img width="976" height="251" alt="image" src="https://github.com/user-attachments/assets/140bc37d-03e5-4dbc-90ae-f19c2d5e4d25" />
 
 Now we have 5 users let show user with username and email only(no password and id) so for that again we use pydantic schemas
@@ -1103,6 +1117,7 @@ def get_user(id:int, db: Session = Depends(get_db)):
 ```
 
 On executing we can get any user with id
+
 <img width="1592" height="847" alt="image" src="https://github.com/user-attachments/assets/51adf473-2e16-443f-b95c-725c66d6446d" />
 
 
@@ -1241,16 +1256,20 @@ def create_blog(request: schemas.BlogCreate, db: Session = Depends(get_db)):
 <img width="947" height="201" alt="image" src="https://github.com/user-attachments/assets/794fe35a-4a2a-4b2f-9a06-0404d122477d" />
 
 Let's create user to see changes
+
 <img width="391" height="458" alt="image" src="https://github.com/user-attachments/assets/8209e01e-f162-4a90-bcd6-02b04531247c" />
 
 <img width="994" height="193" alt="image" src="https://github.com/user-attachments/assets/032a2daa-45bc-4024-b7cb-97af3ef5f1e3" />
 
+
 Now let's create new blog:
+
 <img width="477" height="515" alt="image" src="https://github.com/user-attachments/assets/6136a154-dc48-4801-bbf9-5f8386c4563b" />
 
 <img width="445" height="250" alt="image" src="https://github.com/user-attachments/assets/6ac50d60-9bab-42c9-b957-ebfa29182cc1" />
 
 Now let's check the "blogs" table in blog.db:
+
 <img width="883" height="197" alt="image" src="https://github.com/user-attachments/assets/5971f931-0292-4319-b03e-22d264eb831f" />
 
 
@@ -1310,9 +1329,11 @@ class ShowBlog(BaseModel):
 ```
 
 Now let's create one more blog:
+
 <img width="334" height="188" alt="image" src="https://github.com/user-attachments/assets/a5699f43-4bb0-4b74-8872-a366b82fa701" />
 
 and execute it we will get:
+
 <img width="444" height="415" alt="image" src="https://github.com/user-attachments/assets/c391b1bf-ef92-4be3-bc71-088a17cc9670" />
 
 
