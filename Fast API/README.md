@@ -1343,6 +1343,371 @@ and execute it we will get:
 
 ### 21. API Router
 
+Routers in FastAPI are used to organize your endpoints (routes) into separate files or modules, making your project cleaner, modular, and easier to maintain — especially when you have many routes like `/users`, `/blogs`, `/auth`, etc.
+
+**Why use Routers**
+
+<img width="709" height="176" alt="image" src="https://github.com/user-attachments/assets/d1a4b06c-67ac-4744-899a-59f1a76ae469" />
+
+Let's create a new folder named  `routers`
+
+folder structure:
+```
+routers
+|_ __init__.py
+|_ blog.py
+|_user.py
+```
+
+So from our main.py we will seperate the blog and user endpoints and keep them in `routers/blog.py` and `routers/user.py`
+
+so this is our main.py:
+```
+from fastapi import FastAPI, Depends, status, HTTPException
+from . import schemas, models
+from .database import engine, SessionLocal
+from sqlalchemy.orm import Session
+from .hashing import Hash #importing Hash class from hashing.py file
+
+app = FastAPI()
+
+# Create database tables (if they don't already exist)
+models.Base.metadata.create_all(engine)
+
+
+# Dependency to get a database session for each request
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# Create a blog (POST)
+@app.post('/blog', response_model=schemas.ShowBlog, status_code=status.HTTP_201_CREATED, tags=['blogs'])
+def create_blog(request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    # Automatically assign user_id (e.g., 1)
+    default_user_id = 1
+
+    # Check if user exists
+    user = db.query(models.User).filter(models.User.id == default_user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {default_user_id} not found. Please create a user first."
+        )
+
+    new_blog = models.Blog(
+        title=request.title,
+        body=request.body,
+        user_id=default_user_id
+    )
+    db.add(new_blog)
+    db.commit()
+    db.refresh(new_blog)
+    return new_blog
+
+
+# Delete a blog by ID (DELETE) - return JSON message with 200 OK
+@app.delete('/blog/{id}', status_code=status.HTTP_200_OK, tags=['blogs'])
+def destroy(id: int, db: Session = Depends(get_db)):
+    blog_query = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog_query.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog_query.delete(synchronize_session=False)
+    db.commit()
+    return {"message": "Blog deleted successfully"}
+
+
+# Update a blog by ID (PUT)
+@app.put('/blog/{id}', status_code=status.HTTP_202_ACCEPTED, tags=['blogs'])
+def update(id: int, request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    blog_query = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog_query.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog_query.update(request.dict())
+    db.commit()
+    return {"message": "Updated successfully"}
+
+
+# Get all blogs (GET)
+@app.get('/blog', response_model=list[schemas.ShowBlog], tags=['blogs'])
+def all_blogs(db: Session = Depends(get_db)):
+    blogs = db.query(models.Blog).all()
+    return blogs
+
+
+# Get a single blog by ID (GET)
+@app.get('/blog/{id}', status_code=status.HTTP_200_OK, response_model=schemas.ShowBlog, tags=['blogs'])
+def show(id: int, db: Session = Depends(get_db)):
+    blog = db.query(models.Blog).filter(models.Blog.id == id).first()
+
+    if not blog:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+    return blog
+
+
+# Create user (POST)
+@app.post('/user', response_model=schemas.ShowUser, status_code=status.HTTP_201_CREATED, tags=['users'])
+def create_user(request: schemas.UserCreate, db: Session = Depends(get_db)):
+    # optional: simple duplicate email check
+    existing = db.query(models.User).filter(models.User.email == request.email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email already exists"
+        )
+    new_user = models.User(
+        name=request.name,
+        email=request.email,
+        password= Hash.bcrypt(request.password)
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.get('/user/{id}', response_model=schemas.ShowUser, tags=['users'])
+def get_user(id:int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == id).first()
+    if not user:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User with this id {id} is not available")
+    
+    return user
+```
+
+Now we will split both blogs and user endpoints from this main.py but before that we have to modify `database.py` by adding this get_db function from main.py:
+```
+# Dependency to get a database session for each request
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+here is the modified code of `database.py` :
+```
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+SQLALCHEMY_DATABASE_URL = "sqlite:///./blog.db"
+
+# SQLite specific argument for multithreading
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+
+# Create a session factory
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+# Base class for ORM models
+Base = declarative_base()
+
+# Dependency to get a database session for each request
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+Now this is our `blog.py` inside routers:
+
+### **blog.py**
+```
+from fastapi import APIRouter, Depends, HTTPException, status
+from .. import schemas, database, models
+from sqlalchemy.orm import Session
+
+router = APIRouter()
+
+get_db = database.get_db
+
+# Get all blogs (GET)
+@router.get('/blog', response_model=list[schemas.ShowBlog], tags=['blogs'])
+def all_blogs(db: Session = Depends(get_db)):
+    blogs = db.query(models.Blog).all()
+    return blogs
+
+
+# Create a blog (POST)
+@router.post('/blog', response_model=schemas.ShowBlog, status_code=status.HTTP_201_CREATED, tags=['blogs'])
+def create_blog(request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    # Automatically assign user_id (e.g., 1)
+    default_user_id = 1
+
+    # Check if user exists
+    user = db.query(models.User).filter(models.User.id == default_user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {default_user_id} not found. Please create a user first."
+        )
+
+    new_blog = models.Blog(
+        title=request.title,
+        body=request.body,
+        user_id=default_user_id
+    )
+    db.add(new_blog)
+    db.commit()
+    db.refresh(new_blog)
+    return new_blog
+
+
+# Delete a blog by ID (DELETE) - return JSON message with 200 OK
+@router.delete('/blog/{id}', status_code=status.HTTP_200_OK, tags=['blogs'])
+def destroy(id: int, db: Session = Depends(get_db)):
+    blog_query = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog_query.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog_query.delete(synchronize_session=False)
+    db.commit()
+    return {"message": "Blog deleted successfully"}
+
+
+# Update a blog by ID (PUT)
+@router.put('/blog/{id}', status_code=status.HTTP_202_ACCEPTED, tags=['blogs'])
+def update(id: int, request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    blog_query = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog_query.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog_query.update(request.dict())
+    db.commit()
+    return {"message": "Updated successfully"}
+
+
+# Get a single blog by ID (GET)
+@router.get('/blog/{id}', status_code=status.HTTP_200_OK, response_model=schemas.ShowBlog, tags=['blogs'])
+def show(id: int, db: Session = Depends(get_db)):
+    blog = db.query(models.Blog).filter(models.Blog.id == id).first()
+
+    if not blog:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+    return blog
+
+```
+
+and this is our `user.py` inside routers:
+
+### **user.py**
+```
+from fastapi import APIRouter, Depends, HTTPException, status
+from .. import schemas, database, models
+from sqlalchemy.orm import Session
+from .. hashing import Hash #importing Hash class from hashing.py file
+
+router = APIRouter()
+
+get_db = database.get_db
+
+# Create user (POST)
+@router.post('/user', response_model=schemas.ShowUser, status_code=status.HTTP_201_CREATED, tags=['users'])
+def create_user(request: schemas.UserCreate, db: Session = Depends(get_db)):
+    # optional: simple duplicate email check
+    existing = db.query(models.User).filter(models.User.email == request.email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email already exists"
+        )
+    new_user = models.User(
+        name=request.name,
+        email=request.email,
+        password= Hash.bcrypt(request.password)
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@router.get('/user/{id}', response_model=schemas.ShowUser, tags=['users'])
+def get_user(id:int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == id).first()
+    if not user:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User with this id {id} is not available")
+    
+    return user
+```
+
+After spliting both the user and blog our `main.py` becomes this clean and nice:
+
+### **main.py**
+```
+from fastapi import FastAPI
+from . import models
+from .database import engine
+from .routers import blog, user
+
+app = FastAPI()
+
+# Create database tables (if they don't already exist)
+models.Base.metadata.create_all(engine)
+
+app.include_router(blog.router)
+app.include_router(user.router)
+```
+
+### **API Router Path Operators**
+
+Path operators define what kind of HTTP request (GET, POST, PUT, DELETE) your API handles and what path (URL) it responds to — used inside routers to organize routes cleanly.
+
+Example:
+
+<img width="509" height="156" alt="image" src="https://github.com/user-attachments/assets/349bff3c-4b11-480c-9cbb-028723c2f09b" />
+
+
+Here we are going to refactor all things like tags, prefix, etc.
+
+For blog.py:
+```
+router = APIRouter(
+  prefix = "/blog",
+  tags = ['Blogs']
+)
+```
+
+For user.py:
+```
+router = APIRouter(
+  prefix = "/user",
+  tags = ['Users']
+)
+```
+
+### 22. Blog & User Repositories
+
 
 
 
