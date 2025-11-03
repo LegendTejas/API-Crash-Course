@@ -39,11 +39,11 @@ It covers everything from basics to advanced features with hands-on implementati
 
 ---
 
+
+# 🚀 Fast API Full Course (Follow Step by Step Process to master it)
+
 ---
-
-## 🚀 Fast API Full Course (Follow Step by Step Process to master it)
-
-# Part 1
+# PART 1
 
 
 ### 1. Create a virtual environment and pip install fastapi
@@ -647,9 +647,692 @@ So till now we have seen all the 4 methods (GET, POST, PUT, DELETE)
 
 ---
 
-# Part 2
+# PART 2
 
 ### 16. Response Model
+
+Let's say we want to get blog by id 1 but we only want to get title only (no body and no id) then in that case we will use reponse body 
+
+**Before:**
+<img width="405" height="221" alt="image" src="https://github.com/user-attachments/assets/09b470f7-dbe9-4ace-8996-18f0b27b8a60" />
+
+**After:**
+<img width="260" height="141" alt="image" src="https://github.com/user-attachments/assets/d459966c-8fbf-423c-80f9-4c16de5bfb0f" />
+
+**What Happens on using response body**
+
+- Only the specified fields (here title) appear in the JSON response.
+- AutoDocs (Swagger UI) also show this model.
+
+A response model in FastAPI defines the structure and data type of the response that your API should return.
+It helps ensure data validation, automatic documentation, and clean output (filters out extra/unwanted fields).
+
+NOTE: we call a pydantic models as schemas so here the response model is response schema and sqlalchemy model as model (so don't get confused in model and schema)
+
+- We use this in main.py: `@app.get('/blog/{id}', status_code=status.HTTP_200_OK, response_model=schemas.ShowBlog)`
+
+to get title only our schemas.py will be:
+```
+from pydantic import BaseModel
+
+class Blog(BaseModel):
+    title:str
+    body:str
+
+class ShowBlog(BaseModel):
+    title : str
+    class Config():
+        orm_mode = True
+```
+
+### 17. Create User
+
+Here’s a simple example of how to create a user in FastAPI using a Pydantic model and a POST request
+
+```
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI()
+
+# Pydantic model for request body
+class User(BaseModel):
+    username: str
+    email: str
+    age: int
+
+# In-memory list to store users
+users = []
+
+@app.post("/users/")
+def create_user(user: User):
+    users.append(user)
+    return {"message": "User created successfully!", "user": user}
+```
+
+**How it works**
+
+- POST /users/ endpoint accepts a JSON body matching the User model.
+- The data is automatically validated by FastAPI.
+- The user is stored in a Python list (users).
+- A success message with the user data is returned.
+
+**Example Request (JSON)**
+```
+{
+  "username": "tejas",
+  "email": "tejas@example.com",
+  "age": 21
+}
+```
+
+**Example Response**
+```
+{
+  "message": "User created successfully!",
+  "user": {
+    "username": "tejas",
+    "email": "tejas@example.com",
+    "age": 21
+  }
+}
+```
+
+Now let's create user for our blogs
+
+Before that we have to `pip install "email-validator"` because Pydantic’s EmailStr type depends on an external package called `email-validator`
+
+then make certain changes in these three files `main.py`, `models.py`, `schemas.py` :
+
+### **schemas.py**
+```
+from pydantic import BaseModel, EmailStr
+
+# ---------- Blog schemas ----------
+class BlogBase(BaseModel):
+    title: str
+    body: str
+
+class BlogCreate(BlogBase):
+    pass
+
+class ShowBlog(BlogBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+# ---------- User schemas ----------
+class UserBase(BaseModel):
+    name: str
+    email: EmailStr
+
+class UserCreate(UserBase):
+    password: str
+
+class ShowUser(UserBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+```
+
+### **models.py**
+```
+from sqlalchemy import Column, Integer, String
+from .database import Base
+
+# ORM model for 'blogs' table
+class Blog(Base):
+    __tablename__ = 'blogs'
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    body = Column(String)
+
+class User(Base):
+    __tablename__= 'users'
+
+    id = Column(Integer, primary_key = True, index = True)
+    name = Column(String)
+    email = Column(String)
+    password = Column(String)
+```
+
+### **main.py**
+```
+from fastapi import FastAPI, Depends, status, HTTPException
+from . import schemas, models
+from .database import engine, SessionLocal
+from sqlalchemy.orm import Session
+
+app = FastAPI()
+
+# Create database tables (if they don't already exist)
+models.Base.metadata.create_all(engine)
+
+
+# Dependency to get a database session for each request
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# ---------- BLOG ENDPOINTS ----------
+
+# Create a blog (POST)
+@app.post('/blog', response_model=schemas.ShowBlog, status_code=status.HTTP_201_CREATED)
+def create_blog(request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    new_blog = models.Blog(title=request.title, body=request.body)
+    db.add(new_blog)
+    db.commit()
+    db.refresh(new_blog)
+    return new_blog
+
+
+# Delete a blog by ID (DELETE) - return JSON message with 200 OK
+@app.delete('/blog/{id}', status_code=status.HTTP_200_OK)
+def destroy(id: int, db: Session = Depends(get_db)):
+    blog_query = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog_query.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog_query.delete(synchronize_session=False)
+    db.commit()
+    return {"message": "Blog deleted successfully"}
+
+
+# Update a blog by ID (PUT)
+@app.put('/blog/{id}', status_code=status.HTTP_202_ACCEPTED)
+def update(id: int, request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    blog_query = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog_query.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog_query.update(request.dict())
+    db.commit()
+    return {"message": "Updated successfully"}
+
+
+# Get all blogs (GET)
+@app.get('/blog', response_model=list[schemas.ShowBlog])
+def all_blogs(db: Session = Depends(get_db)):
+    blogs = db.query(models.Blog).all()
+    return blogs
+
+
+# Get a single blog by ID (GET)
+@app.get('/blog/{id}', status_code=status.HTTP_200_OK, response_model=schemas.ShowBlog)
+def show(id: int, db: Session = Depends(get_db)):
+    blog = db.query(models.Blog).filter(models.Blog.id == id).first()
+
+    if not blog:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+    return blog
+
+
+# ---------- USER ENDPOINTS ----------
+
+# Create user (POST)
+@app.post('/user', response_model=schemas.ShowUser, status_code=status.HTTP_201_CREATED)
+def create_user(request: schemas.UserCreate, db: Session = Depends(get_db)):
+    # optional: simple duplicate email check
+    existing = db.query(models.User).filter(models.User.email == request.email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email already exists"
+        )
+
+    new_user = models.User(
+        name=request.name,
+        email=request.email,
+        password=request.password  # in production: hash the password before storing
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+```
+
+To create new user first delete blog.db then restart your server:
+```
+del blog.db
+```
+
+then 
+```
+uvicorn blog.main:app --reload
+```
+
+Now try creating user:
+<img width="875" height="793" alt="image" src="https://github.com/user-attachments/assets/b035eaee-e7ef-4657-9189-1edebd907715" />
+
+
+And to confirm let's check the blog.db:
+<img width="849" height="226" alt="image" src="https://github.com/user-attachments/assets/4bfd4f9f-e2d3-4f65-b46c-43f468150a77" />
+
+So new user created successfully!!!
+
+But the problem here is the password is not encrypted and can be misused so now let's look at hashing/encrypting passwords
+
+### 18. Hash Password
+
+Now we need passlib library to handle password hashes
+```
+pip install passlib
+pip install "bcrypt<4.0"
+```
+This installs bcrypt 3.2.2, which works perfectly with Passlib.
+
+Let's create a new file `hashing.py` :
+
+```
+from passlib.context import CryptContext
+
+pwd_cxt = CryptContext(schemes = ["bcrypt"], deprecated="auto")
+
+class Hash():
+    def bcrypt(password: str):
+        hashedPassword = pwd_cxt.hash(password)
+        return hashedPassword
+```
+
+then we will simply import this file in `main.py` and use it to hash password:
+```
+from fastapi import FastAPI, Depends, status, HTTPException
+from . import schemas, models
+from .database import engine, SessionLocal
+from sqlalchemy.orm import Session
+from .hashing import Hash #importing Hash class from hashing.py file
+
+app = FastAPI()
+
+# Create database tables (if they don't already exist)
+models.Base.metadata.create_all(engine)
+
+
+# Dependency to get a database session for each request
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# Create a blog (POST)
+@app.post('/blog', response_model=schemas.ShowBlog, status_code=status.HTTP_201_CREATED)
+def create_blog(request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    new_blog = models.Blog(title=request.title, body=request.body)
+    db.add(new_blog)
+    db.commit()
+    db.refresh(new_blog)
+    return new_blog
+
+
+# Delete a blog by ID (DELETE) - return JSON message with 200 OK
+@app.delete('/blog/{id}', status_code=status.HTTP_200_OK)
+def destroy(id: int, db: Session = Depends(get_db)):
+    blog_query = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog_query.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog_query.delete(synchronize_session=False)
+    db.commit()
+    return {"message": "Blog deleted successfully"}
+
+
+# Update a blog by ID (PUT)
+@app.put('/blog/{id}', status_code=status.HTTP_202_ACCEPTED)
+def update(id: int, request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    blog_query = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog_query.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog_query.update(request.dict())
+    db.commit()
+    return {"message": "Updated successfully"}
+
+
+# Get all blogs (GET)
+@app.get('/blog', response_model=list[schemas.ShowBlog])
+def all_blogs(db: Session = Depends(get_db)):
+    blogs = db.query(models.Blog).all()
+    return blogs
+
+
+# Get a single blog by ID (GET)
+@app.get('/blog/{id}', status_code=status.HTTP_200_OK, response_model=schemas.ShowBlog)
+def show(id: int, db: Session = Depends(get_db)):
+    blog = db.query(models.Blog).filter(models.Blog.id == id).first()
+
+    if not blog:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+    return blog
+
+
+# Create user (POST)
+@app.post('/user', response_model=schemas.ShowUser, status_code=status.HTTP_201_CREATED)
+def create_user(request: schemas.UserCreate, db: Session = Depends(get_db)):
+    # optional: simple duplicate email check
+    existing = db.query(models.User).filter(models.User.email == request.email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email already exists"
+        )
+    new_user = models.User(
+        name=request.name,
+        email=request.email,
+        password= Hash.bcrypt(request.password)
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+```
+
+
+Now try executing this:
+<img width="269" height="133" alt="image" src="https://github.com/user-attachments/assets/211a76eb-6738-4b10-a253-a5e4b0b311d8" />
+
+Now if we check the blog.db , The password is hashed
+<img width="921" height="131" alt="image" src="https://github.com/user-attachments/assets/58d7d325-ed85-412f-938f-52bf5597e1f6" />
+
+
+Let's create 4 more users:
+<img width="976" height="251" alt="image" src="https://github.com/user-attachments/assets/140bc37d-03e5-4dbc-90ae-f19c2d5e4d25" />
+
+Now we have 5 users let show user with username and email only(no password and id) so for that again we use pydantic schemas
+
+make these changes in `schemas.py`:
+```
+# ---------- User schemas ----------
+class UserBase(BaseModel):
+    name: str
+    email: EmailStr
+
+class UserCreate(UserBase):
+    password: str
+
+class ShowUser(BaseModel):
+    name: str
+    email: str
+    class Config:
+        from_attributes = True
+```
+
+Let's get user by their IDs
+
+add these in `main.py`:
+```
+@app.get('/user/{id}', response_model=schemas.ShowUser)
+def get_user(id:int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == id).first()
+    if not user:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User with this id {id} is not available")
+    
+    return user
+```
+
+On executing we can get any user with id
+<img width="1592" height="847" alt="image" src="https://github.com/user-attachments/assets/51adf473-2e16-443f-b95c-725c66d6446d" />
+
+
+### 19. Using Docs Tags
+
+Use the `tags` parameter with your path operations (and `APIRounter`s) to assign them to different tags:
+
+Example:
+```
+@app.get("/users/", tags=["users"])
+```
+
+```
+@app.get("/blogs/", tags=["blogs"])
+```
+
+<img width="912" height="705" alt="image" src="https://github.com/user-attachments/assets/3e6decf5-db84-411e-8236-d5498deaed57" />
+
+
+### 20. Relationships
+
+To create relationships we use `relationship` provided by SQLAlchemy ORM
+
+This will become, more or less, a "magic" attribute that will contain the values from other tables related to this one.
+
+Let's add a foreign key "user_id" (from "id" column in "user" table) to the "blogs" table
+
+NOTE: first delete blog.db then refresh the server and make changes in the `models.py` and `schemas.py`:
+
+### **models.py**:
+```
+from sqlalchemy import Column, Integer, String, ForeignKey
+from .database import Base
+from sqlalchemy.orm import relationship
+
+# ORM model for 'blogs' table
+class Blog(Base):
+    __tablename__ = 'blogs'
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    body = Column(String)
+    user_id = Column(Integer, ForeignKey('users.id'))
+
+    creator = relationship("User", back_populates="blogs")
+
+
+class User(Base):
+    __tablename__= 'users'
+
+    id = Column(Integer, primary_key = True, index = True)
+    name = Column(String)
+    email = Column(String)
+    password = Column(String)
+
+    blogs = relationship('Blog', back_populates = "creator")
+```
+
+### **schemas.py**:
+```
+from pydantic import BaseModel, EmailStr
+
+
+# ---------- Blog Schemas ----------
+
+class BlogBase(BaseModel):
+    title: str
+    body: str
+
+
+# Request schema for creating a blog
+class BlogCreate(BlogBase):
+    user_id: int  # Added user_id for linking blog with user
+
+    class Config:
+        from_attributes = True
+
+
+# ---------- User Schemas ----------
+
+class UserBase(BaseModel):
+    name: str
+    email: EmailStr
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+# Response schema for showing user details (without password)
+class ShowUser(BaseModel):
+    id: int
+    name: str
+    email: str
+
+    class Config:
+        from_attributes = True
+
+
+# Response schema for showing blog details (with creator info)
+class ShowBlog(BaseModel):
+    id: int
+    title: str
+    body: str
+    creator: ShowUser   # establishes relationship
+
+    class Config:
+        from_attributes = True
+```
+
+also modify the `main.py` with these changes:
+```
+@app.post('/blog', response_model=schemas.ShowBlog, status_code=status.HTTP_201_CREATED, tags=['blogs'])
+def create_blog(request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    # Automatically assign user_id (e.g., 1)
+    default_user_id = 1
+
+    # Check if user exists
+    user = db.query(models.User).filter(models.User.id == default_user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {default_user_id} not found. Please create a user first."
+        )
+
+    new_blog = models.Blog(
+        title=request.title,
+        body=request.body,
+        user_id=default_user_id
+    )
+    db.add(new_blog)
+    db.commit()
+    db.refresh(new_blog)
+    return new_blog
+```
+
+<img width="947" height="201" alt="image" src="https://github.com/user-attachments/assets/794fe35a-4a2a-4b2f-9a06-0404d122477d" />
+
+Let's create user to see changes
+<img width="391" height="458" alt="image" src="https://github.com/user-attachments/assets/8209e01e-f162-4a90-bcd6-02b04531247c" />
+
+<img width="994" height="193" alt="image" src="https://github.com/user-attachments/assets/032a2daa-45bc-4024-b7cb-97af3ef5f1e3" />
+
+Now let's create new blog:
+<img width="477" height="515" alt="image" src="https://github.com/user-attachments/assets/6136a154-dc48-4801-bbf9-5f8386c4563b" />
+
+<img width="445" height="250" alt="image" src="https://github.com/user-attachments/assets/6ac50d60-9bab-42c9-b957-ebfa29182cc1" />
+
+Now let's check the "blogs" table in blog.db:
+<img width="883" height="197" alt="image" src="https://github.com/user-attachments/assets/5971f931-0292-4319-b03e-22d264eb831f" />
+
+
+
+Now let's assign all the blogs creator to one user "Tejas" for that we need to modify `schemas.py`:
+
+```
+from pydantic import BaseModel, EmailStr
+from typing import List
+
+# ---------- Blog Schemas ----------
+
+class BlogBase(BaseModel):
+    title: str
+    body: str
+    class Config:
+        from_attributes = True
+
+# Request schema for creating a blog
+class BlogCreate(BlogBase):
+    user_id: int  # Added user_id for linking blog with user
+
+    class Config:
+        from_attributes = True
+
+
+# ---------- User Schemas ----------
+
+class UserBase(BaseModel):
+    name: str
+    email: EmailStr
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+# Response schema for showing user details (without password)
+class ShowUser(BaseModel):
+    id: int
+    name: str
+    email: str
+    blogs: List[BlogBase] = []
+    class Config:
+        from_attributes = True
+
+
+# Response schema for showing blog details (with creator info)
+class ShowBlog(BaseModel):
+    id: int
+    title: str
+    body: str
+    creator: ShowUser   # establishes relationship
+
+    class Config:
+        from_attributes = True
+```
+
+Now let's create one more blog:
+<img width="334" height="188" alt="image" src="https://github.com/user-attachments/assets/a5699f43-4bb0-4b74-8872-a366b82fa701" />
+
+and execute it we will get:
+<img width="444" height="415" alt="image" src="https://github.com/user-attachments/assets/c391b1bf-ef92-4be3-bc71-088a17cc9670" />
+
+
+---
+
+# PART 3
+
+### 21. API Router
+
+
+
+
+
+
+
+
+
+
+
+
 
 ---
 
