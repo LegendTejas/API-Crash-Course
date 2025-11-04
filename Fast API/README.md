@@ -1349,7 +1349,7 @@ Routers in FastAPI are used to organize your endpoints (routes) into separate fi
 
 <img width="709" height="176" alt="image" src="https://github.com/user-attachments/assets/d1a4b06c-67ac-4744-899a-59f1a76ae469" />
 
-Let's create a new folder named  `routers`
+Let's create a new folder named  `routers` inside our blog folder
 
 folder structure:
 ```
@@ -1708,16 +1708,201 @@ router = APIRouter(
 
 ### 22. Blog & User Repositories
 
+Now let's create a new folder repository (you can name anything) inside our blog folder
+
+folder strucure:
+```
+repositories
+|_ blog.py
+|_ user.py
+```
+
+Now we will again modify the `blog.py` and `user.py` from `routers` folder
+
+So our `repository/blog.py` and `repository/user.py` will contain all the logic:
+
+`repository/blog.py`:
+```
+from sqlalchemy.orm import Session
+from .. import models, schemas
+from fastapi import HTTPException, status
+
+def get_all(db: Session):
+    blogs = db.query(models.Blog).all()
+    return blogs
+
+def create(request: schemas.BlogCreate, db: Session):
+        # Automatically assign user_id (e.g., 1)
+    default_user_id = 1
+
+    # Check if user exists
+    user = db.query(models.User).filter(models.User.id == default_user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {default_user_id} not found. Please create a user first."
+        )
+
+    new_blog = models.Blog(
+        title=request.title,
+        body=request.body,
+        user_id=default_user_id
+    )
+    db.add(new_blog)
+    db.commit()
+    db.refresh(new_blog)
+    return new_blog
+
+def delete(id: int, db: Session):
+    blog_query = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog_query.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog_query.delete(synchronize_session=False)
+    db.commit()
+    return {"message": "Blog deleted successfully"}
+
+def update(id: int, request: schemas.BlogUpdate, db: Session):
+    blog_query = db.query(models.Blog).filter(models.Blog.id == id)
+
+    if not blog_query.first():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+
+    blog_query.update(request.dict(), synchronize_session=False)
+    db.commit()
+    return {"message": "Updated successfully"}
+
+def show(id : int, db: Session):
+    blog = db.query(models.Blog).filter(models.Blog.id == id).first()
+
+    if not blog:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Blog with id {id} not found"
+        )
+    return blog
+```
+
+Now the `routers/blog.py` will be like this:
+
+`routers/blog.py`:
+```
+from fastapi import APIRouter, Depends, HTTPException, status
+from .. import schemas, database, models
+from sqlalchemy.orm import Session
+from ..repository import blog
+
+router = APIRouter(
+    prefix = "/blog",
+    tags=['Blogs']
+)
+
+get_db = database.get_db
+
+# Get all blogs (GET)
+@router.get('/', response_model=list[schemas.ShowBlog])
+def all_blogs(db: Session = Depends(get_db)):
+    return blog.get_all(db)
 
 
+# Create a blog (POST)
+@router.post('/', response_model=schemas.ShowBlog, status_code=status.HTTP_201_CREATED)
+def create_blog(request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    return blog.create(request, db)
+
+# Delete a blog by ID (DELETE) - return JSON message with 200 OK
+@router.delete('/{id}', status_code=status.HTTP_200_OK)
+def destroy(id: int, db: Session = Depends(get_db)):
+    return blog.delete(id, db)
 
 
+# Update a blog by ID (PUT)
+@router.put('/{id}', status_code=status.HTTP_202_ACCEPTED)
+def update(id: int, request: schemas.BlogCreate, db: Session = Depends(get_db)):
+    return blog.update(id, request, db)
+
+# Get a single blog by ID (GET)
+@router.get('/{id}', status_code=status.HTTP_200_OK, response_model=schemas.ShowBlog)
+def show(id: int, db: Session = Depends(get_db)):
+    return blog.show(id, db)
+```
+
+There is some slight changes in `schemas.py` include this:
+```
+class BlogUpdate(BlogBase):
+    pass
+```
 
 
+Similarly for `user.py` inside routers we will move all logic to `repository/user.py`
+
+`repository/user.py`:
+```
+from sqlalchemy.orm import Session
+from .. import models, schemas
+from fastapi import HTTPException, status
+from .. hashing import Hash #importing Hash class from hashing.py file
 
 
+def create(request: schemas.ShowUser, db:Session):
+    # optional: simple duplicate email check
+    existing = db.query(models.User).filter(models.User.email == request.email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email already exists"
+        )
+    new_user = models.User(
+        name=request.name,
+        email=request.email,
+        password= Hash.bcrypt(request.password)
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
 
+def show(id: int, db: Session):
+    user = db.query(models.User).filter(models.User.id == id).first()
+    if not user:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User with this id {id} is not available")
+    
+    return user
+```
 
+Now the `routers/user.py` will be like this:
+```
+from fastapi import APIRouter, Depends, HTTPException, status
+from .. import schemas, database, models
+from sqlalchemy.orm import Session
+from ..repository import user
+
+router = APIRouter(
+      prefix = "/user",
+      tags=['Users']
+)
+
+get_db = database.get_db
+
+# Create user (POST)
+@router.post('/', response_model=schemas.ShowUser, status_code=status.HTTP_201_CREATED)
+def create_user(request: schemas.UserCreate, db: Session = Depends(get_db)):
+        return user.create(request, db)
+
+@router.get('/{id}', response_model=schemas.ShowUser)
+def get_user(id:int, db: Session = Depends(get_db)):
+        return user.show(id, db)
+```
+
+### 23. Login & Verify Password
 
 
 ---
