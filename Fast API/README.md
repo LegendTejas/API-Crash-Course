@@ -2044,6 +2044,583 @@ Now let's generate a jwt token and return
 
 After verifying user credentials, we use JSON Web Tokens (JWT) to securely handle user authentication. JWT allows the backend to confirm the user’s identity on every request without storing session data on the server.
 
+**1. What is JWT?**
+
+JWT (JSON Web Token) is a compact, URL-safe token used for securely transmitting user data between client and server.
+
+- A JWT has three parts:
+```
+Header.Payload.Signature
+```
+
+- Header → Algorithm & token type (e.g., HS256)
+- Payload → Contains user data (e.g., username or user_id)
+- Signature → Verifies that the token hasn’t been tampered with
+
+Example:
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**2. How It Works**
+
+- User logs in with valid credentials.
+- Server generates a JWT token containing user info (like user_id).
+- Token is returned to the client.
+- For future requests, the client includes this token in the Authorization header.
+- Server verifies the token before allowing access to protected routes.
+
+**3. Generating a JWT**
+
+JWTs can be created using the python-jose library:
+
+For that first create a new `token.py` file inside blog folder
+```
+from datetime import datetime, timedelta, timezone
+from jose import JWTError, jwt
+
+SECRET_KEY = "this_is_very_secret"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm = ALGORITHM)
+    return encoded_jwt
+```
+
+- `SECRET_KEY` → Used to sign the token (keep this hidden).
+- `ALGORITHM` → Defines the hashing method.
+- `exp` → Sets token expiration.
+
+
+Also we will add this in `schemas.py`:
+
+```
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+```
+
+
+here is `schemas.py`:
+
+```
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional
+
+# ---------- Blog Schemas ----------
+
+class BlogBase(BaseModel):
+    title: str
+    body: str
+    class Config:
+        from_attributes = True
+
+# Request schema for creating a blog
+class BlogCreate(BlogBase):
+    user_id: int  # Added user_id for linking blog with user
+
+    class Config:
+        from_attributes = True
+
+class BlogUpdate(BlogBase):
+    pass
+
+
+# ---------- User Schemas ----------
+
+class UserBase(BaseModel):
+    name: str
+    email: EmailStr
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+# Response schema for showing user details (without password)
+class ShowUser(BaseModel):
+    id: int
+    name: str
+    email: str
+    blogs: List[BlogBase] = []
+    class Config:
+        from_attributes = True
+
+
+# Response schema for showing blog details (without creator info)
+class ShowBlog(BaseModel):
+    id: int
+    title: str
+    body: str
+    class Config:
+        from_attributes = True
+
+class Login(BaseModel):
+    username: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+```
+
+and some changes in the `authentication.py` file:
+
+```
+from fastapi import APIRouter, Depends, status, HTTPException
+from sqlalchemy.orm import Session
+from .. import schemas, database, models, token
+from ..hashing import Hash
+
+router = APIRouter(tags=['Authentication'])
+
+@router.post('/login')
+def login(request: schemas.Login, db: Session = Depends(database.get_db)):
+    # Step 1: Retrieve the user by email
+    user = db.query(models.User).filter(models.User.email == request.username).first()
+    
+    # Step 2: If user doesn't exist, raise error
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid Credentials"
+        )
+
+    # Step 3: Verify the entered password
+    if not Hash.verify(request.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect Password"
+        )
+
+    access_token = token.create_access_token(data = {"sub" : user.email})
+    return {"access_token" : access_token, "token_type": "bearer"}
+
+#NOTE:
+# username: the existing email in the users table
+# password: the password of the existing user
+```
+
+Let's execute now:
+
+<img width="919" height="780" alt="image" src="https://github.com/user-attachments/assets/8cfec939-63ae-4762-b5ee-642e60b6aa97" />
+
+So now we get the JWT access token:
+
+<img width="1578" height="171" alt="image" src="https://github.com/user-attachments/assets/f89c2be0-bb68-4820-9cdd-4b7a8c44672c" />
+
+### 25. Route Behind Authentication
+
+Let's now secure our endpoints and block all unauthorized access and just only allow authorized user
+
+**4. Protecting Routes with JWT**
+
+To secure endpoints, the app validates tokens using `OAuth2PasswordBearer`.
+
+So for that let's create a new file `oauth2.py` inside `blog` folder
+
+**oauth2.py**:
+```
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from . import token
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+def get_current_user(data: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    return token.verify_token(data, credentials_exception)
+```
+
+**authentication.py**:
+```
+from datetime import datetime, timedelta, timezone
+from jose import JWTError, jwt
+from . import schemas
+
+SECRET_KEY = "this_is_very_secret"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token:str,credentials_exception):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+        token_data = schemas.TokenData(email=email)
+    except JWTError:
+        raise credentials_exception
+```
+
+**schemas.py**:
+```
+from pydantic import BaseModel, EmailStr
+from typing import List, Optional
+
+# ---------- Blog Schemas ----------
+
+class BlogBase(BaseModel):
+    title: str
+    body: str
+    class Config:
+        from_attributes = True
+
+# Request schema for creating a blog
+class BlogCreate(BlogBase):
+    user_id: int  # Added user_id for linking blog with user
+
+    class Config:
+        from_attributes = True
+
+class BlogUpdate(BlogBase):
+    pass
+
+
+# ---------- User Schemas ----------
+
+class UserBase(BaseModel):
+    name: str
+    email: EmailStr
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+# Response schema for showing user details (without password)
+class ShowUser(BaseModel):
+    id: int
+    name: str
+    email: str
+    blogs: List[BlogBase] = []
+    class Config:
+        from_attributes = True
+
+
+# Response schema for showing blog details (without creator info)
+class ShowBlog(BaseModel):
+    id: int
+    title: str
+    body: str
+    class Config:
+        from_attributes = True
+
+class Login(BaseModel):
+    username: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    email: Optional[str] = None
+```
+
+**token.py**
+```
+from datetime import datetime, timedelta, timezone
+from jose import JWTError, jwt
+from . import schemas
+
+SECRET_KEY = "this_is_very_secret"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token:str,credentials_exception):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+        token_data = schemas.TokenData(email=email)
+    except JWTError:
+        raise credentials_exception
+```
+
+**blog.py** inside `routers` folder:
+```
+from typing import List
+from fastapi import APIRouter, Depends, status, HTTPException
+from sqlalchemy.orm import Session
+from .. import schemas, database, models, oauth2
+from ..repository import blog
+
+router = APIRouter(
+    prefix="/blog",
+    tags=['Blogs']
+)
+
+get_db = database.get_db
+
+
+# ---------- Get all blogs ----------
+@router.get('/', response_model=List[schemas.ShowBlog])
+def get_all_blogs(
+    db: Session = Depends(get_db),
+    current_user: schemas.UserBase = Depends(oauth2.get_current_user)
+):
+    return blog.get_all(db)
+
+
+# ---------- Create a new blog ----------
+@router.post('/', status_code=status.HTTP_201_CREATED, response_model=schemas.ShowBlog)
+def create_blog(
+    request: schemas.BlogCreate,
+    db: Session = Depends(get_db)
+):
+    return blog.create(request, db)
+
+
+# ---------- Delete a blog ----------
+@router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
+def delete_blog(
+    id: int,
+    db: Session = Depends(get_db)
+):
+    return blog.destroy(id, db)
+
+
+# ---------- Update a blog ----------
+@router.put('/{id}', status_code=status.HTTP_202_ACCEPTED, response_model=schemas.ShowBlog)
+def update_blog(
+    id: int,
+    request: schemas.BlogUpdate,
+    db: Session = Depends(get_db)
+):
+    return blog.update(id, request, db)
+
+
+# ---------- Get a specific blog ----------
+@router.get('/{id}', status_code=status.HTTP_200_OK, response_model=schemas.ShowBlog)
+def get_blog_by_id(
+    id: int,
+    db: Session = Depends(get_db)
+):
+    return blog.show(id, db)
+```
+
+After making all these modification lets refresh our server we will see a lock button of authorize and also lock button on GET(all blogs) so if we try executing GET it will say unauthorized
+
+<img width="928" height="905" alt="image" src="https://github.com/user-attachments/assets/14108036-b3a4-4b25-a9a1-f88c70cae305" />
+
+so now click on authorize and enter username and password
+<img width="719" height="452" alt="image" src="https://github.com/user-attachments/assets/bcbe1706-9e8d-453f-ae16-46925ce7d443" />
+
+So Now we can access the GET i.e all blogs
+
+Ok now lets lock all endpoints:
+
+**blog.py**:
+```
+from typing import List
+from fastapi import APIRouter, Depends, status, HTTPException
+from sqlalchemy.orm import Session
+from .. import schemas, database, models, oauth2
+from ..repository import blog
+
+router = APIRouter(
+    prefix="/blog",
+    tags=['Blogs']
+)
+
+get_db = database.get_db
+
+
+# ---------- Get all blogs ----------
+@router.get('/', response_model=List[schemas.ShowBlog])
+def get_all_blogs(
+    db: Session = Depends(get_db),
+    current_user: schemas.UserBase = Depends(oauth2.get_current_user)
+):
+    return blog.get_all(db)
+
+
+# ---------- Create a new blog ----------
+@router.post('/', status_code=status.HTTP_201_CREATED, response_model=schemas.ShowBlog)
+def create_blog(
+    request: schemas.BlogCreate,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserBase = Depends(oauth2.get_current_user)
+):
+    return blog.create(request, db)
+
+
+# ---------- Delete a blog ----------
+@router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
+def delete_blog(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserBase = Depends(oauth2.get_current_user)
+):
+    return blog.destroy(id, db)
+
+
+# ---------- Update a blog ----------
+@router.put('/{id}', status_code=status.HTTP_202_ACCEPTED, response_model=schemas.ShowBlog)
+def update_blog(
+    id: int,
+    request: schemas.BlogUpdate,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserBase = Depends(oauth2.get_current_user)
+):
+    return blog.update(id, request, db)
+
+
+# ---------- Get a specific blog ----------
+@router.get('/{id}', status_code=status.HTTP_200_OK, response_model=schemas.ShowBlog)
+def get_blog_by_id(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserBase = Depends(oauth2.get_current_user)
+):
+    return blog.show(id, db)
+```
+
+<img width="923" height="914" alt="image" src="https://github.com/user-attachments/assets/3f712dc3-c0b3-45bf-a829-908e3c092f43" />
+
+**5. Login Flow with JWT**
+
+- User logs in → credentials are verified.
+- A JWT access token is generated using create_access_token().
+- Token is returned to the client.
+- The client uses this token in headers for authorized requests:
+
+We can try postman for this
+<img width="1754" height="899" alt="image" src="https://github.com/user-attachments/assets/26c9020c-ee42-4d5f-aa0a-a806c788524e" />
+
+
+---
+
+# PART 4
+
+### 26. Deploying FastAPI App on [Deta.sh](https://www.deta.sh)
+
+Follow these steps to deploy your FastAPI application to **Deta Cloud**.
+
+---
+
+#### **1. Install Deta CLI**
+
+```
+pip install deta
+```
+
+#### **2. Login to Deta**
+
+```
+deta login
+```
+
+A browser window will open asking you to sign in with your Deta account
+
+#### **3. Initialize a New Deta Micro
+
+Navigate to your FastAPI project folder (where `main.py` is located):
+
+```
+cd path/to/your/project
+deta new
+```
+
+This creates a new Deta Micro and a `.deta` folder containing deployment metadata.
+
+
+#### **4. Modify Your FastAPI Entry Point**
+
+Make sure your `main.py` includes the following:
+```
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+def root():
+    return {"message": "FastAPI on Deta working!"}
+```
+
+The app object must be named app.
+
+#### **5. Create a `requirements.txt` File**
+
+Include all necessary dependencies:
+```
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+python-jose
+passlib[bcrypt]
+python-multipart
+```
+
+You can generate it automatically:
+```
+pip freeze > requirements.txt
+```
+
+#### **6. Deploy the Application**
+```
+deta deploy
+```
+
+Deta will:
+- Install dependencies from requirements.txt
+- Deploy your FastAPI app
+- Provide a public **HTTPS URL**
+
+Example Output:
+```
+✅ Successfully deployed!
+ Your app is live at: https://yourappname.deta.dev
+```
+
+#### **7.Test Your API**
+
+Open the deployed URL in your browser, then append /docs to test Swagger UI:
+```
+https://yourappname.deta.dev/docs
+```
+
+#### **8. View Logs**
+```
+deta logs
+```
+
+### Deployment Summary
+
+<img width="407" height="287" alt="image" src="https://github.com/user-attachments/assets/4e6b5da9-66df-4cc2-8062-540f0c6a8c41" />
+
 
 ---
 
@@ -2069,3 +2646,28 @@ Feel free to fork this repo and submit pull requests with improvements.
 
 ## 📜 License
 This project is licensed under the MIT License.  
+
+---
+
+## ❤️ Thank You
+
+Hey everyone 👋  
+
+If you’ve made it this far through my `README.md`, I just want to say a genuine **Thank You!**.  
+Building this FastAPI project took a lot of effort — late nights, countless bugs, and moments of triumph that made every bit of it worth it.
+
+
+Just to note one point here that I haven’t included the PART 4 of actual deployment here, just the steps you can follow to deploy your own FastAPI app on **`deta.sh`**.  
+
+Still, every part of this project came from real effort, learning, and a lot of love for building things that work.  
+
+If this repo helped you even a little, please consider ⭐ **starring it** - it really keeps me motivated to keep creating and sharing more projects like this.  
+
+Thanks again for stopping by - and as always, **Happy Coding!**
+
+---
+## **Today is an opportunity to get better don't waste it have a nice day guys**
+
+<img width="640" height="512" alt="image" src="https://github.com/user-attachments/assets/58aad917-44b7-45bf-acbb-ec6af34e63cb" />
+
+---
