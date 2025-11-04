@@ -1904,6 +1904,146 @@ def get_user(id:int, db: Session = Depends(get_db)):
 
 ### 23. Login & Verify Password
 
+This section explains how user login and password verification are handled in the FastAPI application. It ensures that sensitive user passwords are never stored in plain text and that only valid users can access protected resources.
+
+Let's add login and verification of user in our fastapi application
+
+so now let's create a new file `authentication.py` inside `routers` folder
+
+`authentication.py`:
+```
+from fastapi import APIRouter, Depends, status, HTTPException
+from sqlalchemy.orm import Session
+from .. import schemas, database, models
+from ..hashing import Hash
+
+router = APIRouter(tags=['Authentication'])
+
+@router.post('/login')
+def login(request: schemas.Login, db: Session = Depends(database.get_db)):
+    # Step 1: Retrieve the user by email
+    user = db.query(models.User).filter(models.User.email == request.username).first()
+    
+    # Step 2: If user doesn't exist, raise error
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid Credentials"
+        )
+
+    # Step 3: Verify the entered password
+    if not Hash.verify(request.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect Password"
+        )
+
+    # Step 4: (Next Step) Generate and return JWT Token
+    return {"message": "Login Successful"}
+
+#NOTE:
+# username: the existing email in the users table
+# password: the password of the existing user
+```
+
+also make changes in the `hashing.py` file:
+```
+from passlib.context import CryptContext
+
+# Initialize password hashing context using bcrypt
+pwd_cxt = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+class Hash:
+    @staticmethod
+    def bcrypt(password: str):
+        """Hash a plain password using bcrypt algorithm."""
+        return pwd_cxt.hash(password)
+
+    @staticmethod
+    def verify(plain_password: str, hashed_password: str):
+        """Verify a plain password against its hashed version."""
+        return pwd_cxt.verify(plain_password, hashed_password)
+
+```
+
+<img width="1665" height="847" alt="image" src="https://github.com/user-attachments/assets/4e904d35-776f-42eb-88da-65cacbcd25ef" />
+
+So Let's see what's really happening:
+
+**1. Password Hashing**
+
+To securely store passwords, the application uses Passlib’s CryptContext with the bcrypt hashing algorithm.
+
+**Hashing during registration:**
+When a user registers, their password is hashed before saving it to the database.
+
+
+**2. Password Verification**
+
+During login, the entered password is verified against the stored hash using Passlib’s verify() method.
+```
+def verify(plain_password, hashed_password):
+    return pwd_cxt.verify(plain_password, hashed_password)
+```
+
+The function returns `True` if the provided password matches the hashed one.
+
+Otherwise, it denies authentication.
+
+
+**3. Login Endpoint Logic**
+
+The /login endpoint performs the following steps:
+
+- Fetch user data from the database using the provided username.
+- Check if user exists — if not, return an error.
+- Verify password using the verify() function.
+
+Return success response if credentials are valid, or a 401 Unauthorized error otherwise.
+
+```
+@router.post('/login')
+def login(request: schemas.Login, db: Session = Depends(database.get_db)):
+    # Step 1: Retrieve the user by email
+    user = db.query(models.User).filter(models.User.email == request.username).first()
+    
+    # Step 2: If user doesn't exist, raise error
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid Credentials"
+        )
+
+    # Step 3: Verify the entered password
+    if not Hash.verify(request.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect Password"
+        )
+
+    # Step 4: (Next Step) Generate and return JWT Token
+    return {"message": "Login Successful"}
+```
+
+<img width="1654" height="903" alt="image" src="https://github.com/user-attachments/assets/baa8f319-cb70-44f1-97af-9aeea1545bd7" />
+
+
+Here the username is email of existing user from users table
+and password is the password of that existing user
+
+Since the user exists so we get succesful message
+
+<img width="405" height="172" alt="image" src="https://github.com/user-attachments/assets/a74f0758-537c-48c5-85c1-1019d7f5fcab" />
+
+
+### 24. JWT Access Token
+
+Now let's generate a jwt token and return
+
+**JWT Authentication Overview**
+
+After verifying user credentials, we use JSON Web Tokens (JWT) to securely handle user authentication. JWT allows the backend to confirm the user’s identity on every request without storing session data on the server.
+
 
 ---
 
