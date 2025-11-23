@@ -8,8 +8,9 @@ Flask allows developers to create web servers, handle routes (URLs), process use
 
 Because of its simplicity and modular design, Flask is widely used for small to medium applications, APIs, and rapid prototyping. Developers can add extensions for authentication, database ORM, form handling, and more depending on the project requirements.
 
+---
 
-## 3. User Guide 
+## 2. USER GUIDE
 ### (Step by Step Follow along to master Flask Web Development)
 
 First download all necessary modules from requirements.txt] 
@@ -580,8 +581,11 @@ now our todo app looks much better
 ### **Step 7: CRUD Operations**
 
 ✅ Add To-Do
+
 ✅ Show To-Do
+
 ✅ Update To-Do
+
 ✅ Delete To-Do
 
 modify `app.py`:
@@ -731,7 +735,7 @@ Now it's updated
 
 ---
 
-### Here are the modifications made for CRUD Operations and all:
+### Here are the modifications made for CRUD Operations and all so far:
 
 **1. Enabled POST handling on the home route**
 - Changed the `/` route to accept both GET and POST so form data can be submitted.
@@ -746,21 +750,178 @@ Now it's updated
 
 - Created `/delete/<sno>` route that finds the todo by ID and deletes it.
 
-Added update functionality
+**5. Added update functionality**
 
-Created `/update/<sno>` route to show an update form and save edited values.
+- Created `/update/<sno>` route to show an update form and save edited values.
 
-Created `update.html` template
+**6. Created `update.html` template**
 
-Displays current todo values and allows editing.
+- Displays current todo values and allows editing.
 
-Adjusted homepage render
+**7. Adjusted homepage render**
 
-Sends `allTodo` list to index.html so the table displays all todos.
+- Sends `allTodo` list to `index.html` so the table displays all todos.
 
-Kept automatic database creation
+**8. Kept automatic database creation**
 
-Kept `db.create_all()` inside `app.app_context()` so tables are created automatically.
+- Kept `db.create_all()` inside `app.app_context()` so tables are created automatically.
+
 
 ---
+
+### **Step 8: Creating a base template**
+
+**NOTE:**
+Template inheritance means you create one main HTML file (a base template) with common parts like navbar, header, and footer, and other pages extend it. This way, you reuse the same layout everywhere without repeating code.
+
+Now create one file **base.html** in `templates/`:
+
+we will cut the code from `index.html` that we want it to remain fixed or common when navigationg to different page in our website:
+
+**base.html**:
+```
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Todo</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+
+<body>
+        <nav class="navbar navbar-expand-lg bg-primary" data-bs-theme="dark">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">My Todo App</a>
+
+        <!-- Toggler -->
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+          aria-label="Toggle navigation"
+          title="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon" aria-hidden="true"></span>
+          <span class="visually-hidden">Toggle navigation</span>
+        </button>
+
+        <!-- Menu -->
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a class="nav-link active" aria-current="page" href="#">Home</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">Features</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">Pricing</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">Contact</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+{% block body %}
+    
+{% endblock  body %}
+</body>
+
+</html>
+```
+
+modify **index.html**:
+```
+{% extends 'base.html' %}
+{% block body %}
+
+    <div class="container my-3">
+      <h2>Add a To-Do</h2>
+      <form action="/" method="POST">
+        <div class="mb-3">
+          <label for="todotitle" class="form-label">Todo Title</label>
+          <input
+            type="text"
+            class="form-control"
+            id="todotitle"
+            name="title"
+            aria-describedby="title"
+          />
+        </div>
+        <div class="mb-3">
+          <label for="desc" class="form-label">Todo Description</label>
+          <input type="text" class="form-control" name="desc" id="desc" />
+        </div>
+        <button type="submit" class="btn btn-primary">Submit</button>
+      </form>
+    </div>
+
+    <div class="container my-4">
+      <h2>Your To-Do List</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">S.No</th>
+            <th scope="col">Title</th>
+            <th scope="col">Description</th>
+            <th scope="col">Date Created</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for todo in allTodo %}
+          <tr>
+            <th scope="row">{{loop.index}}</th>
+            <td>{{todo.title}}</td>
+            <td>{{todo.desc}}</td>
+            <td>{{todo.date_created}}</td>
+            <td>
+              <a href="/update/{{todo.sno}}" type="button" class="btn btn-outline-success btn-sm mx-1">Update</a>
+              <a href="/delete/{{todo.sno}}" type="button" class="btn btn-outline-danger btn-sm mx-1">Delete</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+{% endblock  body %}
+```
+
+
+---
+
+### **Step 9: Deploying our To-Do App on Heroku**
+
+
+
+
+
+
+
+
+⭐ Now it's all done!! ⭐
+
+---
+
+## 3. RESOURCES
+
+Flask Official Documentation: [Flask](https://flask.palletsprojects.com/en/stable/)
+
+Flask-SQLAlchemy Documentation: [Flask-SQLAlchemy](https://flask-sqlalchemy.readthedocs.io/en/stable/)
+
+Heroku Deployment Guide: [Heroku Deployment](https://coding-boot-camp.github.io/full-stack/heroku/heroku-deployment-guide)
+
+---
+
+<h3 align="center">✨ <strong>Happy Coding ✨</strong> </h3>
 
