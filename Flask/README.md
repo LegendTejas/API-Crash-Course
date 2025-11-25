@@ -902,9 +902,23 @@ modify **index.html**:
 
 ### **Step 9: Deploying our To-Do App on Heroku**
 
+Follow these commands:
+```
+heroku login
 
+pip install gunicorn
+pip freeze requirements.txt
+Procfile
+web: gunicorn app:app
 
+git init
+git add .
+git commit -m "Initial commmit"
 
+heroku create todo-tejax
+git remote -v
+git push heroku master
+```
 
 
 
