@@ -1,2 +1,6 @@
-flask
-flask-sqlalchemy
+Flask
+Flask-SQLAlchemy
+gunicorn
+Jinja2
+SQLAlchemy
+Werkzeug
