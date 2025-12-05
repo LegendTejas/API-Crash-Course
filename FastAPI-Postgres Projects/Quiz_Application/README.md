@@ -30,8 +30,8 @@ Built using **FastAPI**, **SQLAlchemy**, and **PostgreSQL**.
 
 ### **1. Clone the repository**
 ```bash
-git clone <your-repo-url>
-cd <your-project-folder>
+git clone https://github.com/LegendTejas/API-Data-Backend
+cd Quiz_Application
 ```
 
 ### **2. Create and activate a virtual environment**
