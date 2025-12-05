@@ -99,7 +99,7 @@ REST APIs are:
 - Template rendering  
 - REST API implementation  
 - Form handling  
-- Mini projects & exercises  
+- Mini projects  
 
 ---
 
@@ -115,6 +115,7 @@ Used for relational data with:
 
 ### 🍃 MongoDB
 Used for NoSQL document-based storage:
+- Pymongo
 - Motor async driver  
 - FastAPI integration  
 - Efficient query patterns  
